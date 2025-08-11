@@ -57,7 +57,6 @@ class confluence::install {
         user    => $confluence::user,
         group   => $confluence::group,
         notify  => Exec["chown_${confluence::webappdir}"],
-        before  => File[$confluence::homedir],
         require => [
           File[$confluence::installdir],
           File[$confluence::webappdir],
@@ -65,6 +64,9 @@ class confluence::install {
       }
       if $confluence::manage_user {
         User[$confluence::user] -> Staging::Extract[$file]
+      }
+      if $confluence::manage_homedir {
+        Staging::Extract[$file] -> File[$confluence::homedir]
       }
     }
     'archive': {
@@ -83,7 +85,6 @@ class confluence::install {
         group           => $confluence::group,
         proxy_server    => $confluence::proxy_server,
         proxy_type      => $confluence::proxy_type,
-        before          => File[$confluence::homedir],
         require         => [
           File[$confluence::installdir],
           File[$confluence::webappdir],
@@ -92,18 +93,24 @@ class confluence::install {
       if $confluence::manage_user {
         User[$confluence::user] -> Archive["/tmp/${file}"]
       }
+      if $confluence::manage_homedir {
+        Archive["/tmp/${file}"] -> File[$confluence::homedir]
+      }
     }
     default: {
       fail('deploy_module parameter must equal "archive" or "staging"')
     }
   }
 
-  file { [$confluence::homedir, "${confluence::homedir}/logs"]:
-    ensure => 'directory',
-    group  => $confluence::group,
-    owner  => $confluence::user,
+  if $confluence::manage_homedir {
+    file { [$confluence::homedir, "${confluence::homedir}/logs"]:
+      ensure => 'directory',
+      group  => $confluence::group,
+      owner  => $confluence::user,
+    }
   }
-  -> exec { "chown_${confluence::webappdir}":
+
+  exec { "chown_${confluence::webappdir}":
     command     => "/bin/chown -R ${confluence::user}:${confluence::group} ${confluence::webappdir}",
     refreshonly => true,
   }
